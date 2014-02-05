@@ -1,0 +1,611 @@
+package biosimilarity.slmc.ast.parsing;
+
+import biosimilarity.slmc.*;
+import biosimilarity.slmc.ast.*;
+import biosimilarity.slmc.ast.cc.*;
+import biosimilarity.slmc.ast.ml.*;
+import biosimilarity.slmc.ast.pc.*;
+import biosimilarity.slmc.ast.sr.*;
+import biosimilarity.slmc.ast.ss.*;
+import scala.collection.immutable.List;
+import scala.collection.immutable.List$;
+import scala.collection.immutable.$colon$colon;
+import scala.Tuple2;
+import scala.Tuple3;
+
+action code {:
+
+    public static <T> List<T> list(T ... ts) {
+        List<T> result = List$.MODULE$.empty();
+        for(int i = ts.length; i > 0; i--) {
+            result = new $colon$colon(ts[i - 1], result);
+        }
+        return result;
+    }
+    
+    public static <T> List<T> nil() {
+      List<T> result = List$.MODULE$.empty();
+      return result;
+    }
+    
+    public static <T> List<T> cons(T t, List<T> ts) {
+      return new $colon$colon(t, ts);
+    }
+    
+    public static <T> List<T> snoc(List<T> ts, T t) {
+      return cons(t, ts.reverse()).reverse();
+    }
+    
+:};
+
+terminal TRUE, FALSE, VOID, SELECT, NOT, AND, OR, REVEAL, REVEALALL, HIDDEN, FRESH, 
+EXISTS, FORALL, MAXFIX, MINFIX, EVENTUALLY, ALWAYS, INSIDE, SHOW_F, SHOW_S, TAU, DEFPROP, 
+NEW, IN, DEFPROC, CHECK, PARAM, MT, CC, ST, CD, PD, TRACE, ON, OFF, PRINT, SHOW, PROPS, 
+PROCS, CLEAR, LOAD, HELP, QUIT, CONV, PI, DEFC, JOIN, CTX, SWITCH, IF, THEN, ELSE, THIS, 
+END, PIPE, ZERO, DEFARROW, LT, GT, LPARR, RPARR, STAR, BANG, QUESTION, DOT, LBR, RBR, 
+FREE, DBLPIPE, LPAR, RPAR, COMMA, EQ, DEQ, NEQ, IMPLIES, EQUIV, SAT, SEMI, UPC, USCORE;
+terminal String LOWER_ID, CAPS_ID, FILENAME;
+terminal Integer INT;
+
+non terminal List<SLMCStatement> top;
+non terminal SLMCStatement stmt;
+non terminal SLMCStatement check;
+non terminal SLMCStatement def_proc;
+non terminal Tuple3<List<String>, List<List<String>>, List<PiCalculus>> ands;
+non terminal List<String> params;
+non terminal List<String> check_args;
+non terminal PiCalculus proc;
+non terminal PiCalculus simple_proc;
+non terminal PiCalculus act_sum;
+non terminal PiCalculus sum;
+non terminal List<String> id_args;
+non terminal List<String> check_ids;
+non terminal List<String> inp_ids;
+non terminal List<String> out_ids;
+non terminal List<String> res_ids;
+non terminal SLMCStatement def_prop;
+non terminal Tuple3<String, List<String>, List<String>> dec_name;
+non terminal List<String> param_ids;
+non terminal List<String> props;
+non terminal List<String> label_ids;
+non terminal ModalLogic form;
+non terminal ModalLogic simple_form;
+non terminal List<String> fixpoint_args;
+non terminal List<String> label_ids_uscore;
+non terminal Label label;
+non terminal tau;
+non terminal List<ModalLogic> args;
+non terminal ConversationCalculus cc_simple_proc;
+non terminal ConversationCalculus cc_input;
+non terminal List<ConversationCalculus> cc_branches;
+non terminal ConversationCalculus proc_cc;
+
+start with top;
+
+top ::=
+  /** EMPTY **/  {: RESULT = nil(); :}
+| stmt:v1 top:v2 {: RESULT = snoc(v2, v1);  :}
+;
+
+stmt ::=
+                   SEMI {: RESULT = CW.ssPass(); :}
+| def_proc:v1      SEMI {: RESULT = v1; :}
+| def_prop:v1      SEMI {: RESULT = v1; :}
+| check:v1         SEMI {: RESULT = v1; :}
+| PARAM MT INT:v3  SEMI {: RESULT = CW.ssDefineMaxThreads(v3); :}
+| PARAM MT         SEMI {: RESULT = CW.ssPrintMaxThreads(); :}
+| PARAM CC ON      SEMI {: RESULT = CW.ssDefineCheckCounter(true); :}
+| PARAM CC OFF     SEMI {: RESULT = CW.ssDefineCheckCounter(false); :}
+| PARAM CC         SEMI {: RESULT = CW.ssPrintCheckCounter(); :}
+| PARAM ST ON      SEMI {: RESULT = CW.ssDefineShowTime(true); :}
+| PARAM ST OFF     SEMI {: RESULT = CW.ssDefineShowTime(false); :}
+| PARAM ST         SEMI {: RESULT = CW.ssPrintShowTime(); :}
+| PARAM            SEMI {: RESULT = CW.ssListParameters(); :}
+| CD FILENAME:v2   SEMI {: RESULT = CW.ssChangeDirectory(v2); :}
+| PD               SEMI {: RESULT = CW.ssPrintDirectory(); :}
+| TRACE            SEMI {: RESULT = CW.ssPrintTrace(); :}
+| TRACE ON         SEMI {: RESULT = CW.ssDefineTrace(true); :}
+| TRACE OFF        SEMI {: RESULT = CW.ssDefineTrace(false); :} 
+| LOAD FILENAME:v2 SEMI {: RESULT = CW.ssLoad(v2); :}
+| CLEAR            SEMI {: RESULT = CW.ssClear(); :}
+| SHOW CAPS_ID:v2  SEMI {: RESULT = CW.ssShowProcess(v2); :}
+| SHOW LOWER_ID:v2 SEMI {: RESULT = CW.ssShowProposition(v2); :}
+| PRINT PROCS      SEMI {: RESULT = CW.ssPrintProcesses(); :}
+| PRINT PROPS      SEMI {: RESULT = CW.ssPrintPropositions(); :}
+| HELP             SEMI {: RESULT = CW.ssHelp(); :}
+| QUIT             SEMI {: RESULT = CW.ssDone(); :}
+| error            SEMI 
+	{: CW.error("defproc\ndefprop\ncheck\nparameter\nnew ListW" +
+	"\nshow\nload\ncd\npd\ntrace\nclear\nhelp\nquit"); :}
+;
+
+check ::=
+  CHECK CAPS_ID:v2 check_args:v3 SAT form:v5 
+    {: RESULT = CW.ssCheck(v2,v3,v5); :}
+| CHECK CAPS_ID check_args SAT error 
+    {: CW.error("<FORMULA>"); :}
+| CHECK CAPS_ID error 
+    {: CW.error("|=\n("); :}
+| CHECK error 
+    {: CW.error("<PROCESS LOWER_IDENTIFIER>"); :}
+;
+
+def_proc ::=
+  DEFPROC CONV CAPS_ID:v3 params:v4 EQ proc_cc:v6
+    {: RESULT = CW.ssDefineCCProcess(v3,v4,v6); :}
+| DEFPROC PI CAPS_ID:v3 params:v4 EQ proc:v6 ands:v7 
+    {: RESULT = CW.ssDefinePiProcesses(cons(v3, v7._1()), cons(v4, v7._2()), cons(v6, v7._3())); :}
+| DEFPROC CAPS_ID:v2 params:v3 EQ proc:v5 ands:v6
+    {: RESULT = CW.ssDefinePiProcesses(cons(v2, v6._1()), cons(v3, v6._2()), cons(v5, v6._3())); :}
+| DEFPROC CAPS_ID params EQ proc error 
+    {: CW.error("and\n;\n|"); :}
+| DEFPROC CAPS_ID params EQ error 
+    {: CW.error("<PROCESS>"); :}
+| DEFPROC CAPS_ID error 
+    {: CW.error("=\n("); :}
+| DEFPROC error 
+    {: CW.error("<PROCESS LOWER_IDENTIFIER>"); :} 
+;
+
+ands ::=
+  /** EMPTY **/
+    {: List<String> n1 = nil();
+       List<List<String>> n2 = nil();
+       List<PiCalculus> n3 = nil();
+       RESULT = new Tuple3(n1, n2, n3); :}
+| ands:v1 AND CAPS_ID:v3 params:v4 EQ proc:v6
+    {: RESULT = new Tuple3(cons(v3, v1._1()), cons(v4, v1._2()), cons(v6, v1._3())); :}
+| ands AND CAPS_ID params EQ error 
+	{: CW.error("<PROCESS>"); :}
+| ands AND CAPS_ID error 
+	{: CW.error("=\n("); :}
+;
+
+params ::=
+  /** EMPTY **/       {: RESULT = list(); :}
+| LPAR RPAR           {: RESULT = list(); :}
+| LPAR param_ids:v2 RPAR {: RESULT = v2.reverse(); :}
+| LPAR error          {: CW.error("<ID> [,<ID>]*\n)"); :}
+;
+
+check_args ::=
+  /** EMPTY **/          {: RESULT = list(); :}
+| LPAR check_ids:v2 RPAR {: RESULT = v2.reverse(); :}
+| LPAR error             {: CW.error("<ID> [,<ID>]*\n)"); :}
+;
+
+proc ::=
+  simple_proc:v1              {: RESULT = v1; :}
+| proc:v1 PIPE simple_proc:v3 {: RESULT = CW.pcParallel(v1,v3); :}
+| proc PIPE error             {: CW.error("<PROCESS>"); :}
+;
+    
+simple_proc ::=
+  ZERO             
+    {: RESULT = CW.pcVoid(); :}
+| CAPS_ID:v1 id_args:v2
+    {: RESULT = CW.pcVariable(v1,v2); :}
+| NEW res_ids:v2 IN simple_proc:v4              
+    {: for(String id: CW.makeIterable(v2)) {
+         if(CW.usage().get(id).get() == 0) {
+           System.out.println("Warning: Unused restricted name " + id);
+         } else {
+           CW.usage().remove(id);
+         }
+       }
+       RESULT = CW.pcNew(v2.reverse(), v4); :}
+| LOWER_ID:v1 QUESTION LPAR inp_ids:v4 RPAR DOT simple_proc:v7
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       for(String id: CW.makeIterable(v4)) {
+         CW.usage().remove(id);
+       }
+       RESULT = CW.pcAction(CW.pcInput(v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 QUESTION LPAR inp_ids:v4 RPAR     
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       for(String id: CW.makeIterable(v4)) {
+         CW.usage().remove(id);
+       }
+       RESULT = CW.pcAction(CW.pcInput(v1, v4.reverse()), CW.pcVoid()); :}
+
+| LOWER_ID:v1 BANG LPAR out_ids:v4 RPAR DOT simple_proc:v7         
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       RESULT = CW.pcAction(CW.pcOutput(v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 BANG LPAR out_ids:v4 RPAR
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       RESULT = CW.pcAction(CW.pcOutput(v1, v4.reverse()), CW.pcVoid()); :}
+| TAU DOT simple_proc:v3
+    {: RESULT = CW.pcAction(CW.pcTau(), v3); :}
+| TAU
+    {: RESULT = CW.pcAction(CW.pcTau(), CW.pcVoid()); :}
+| LPARR LOWER_ID:v2 EQ LOWER_ID:v4 RPARR DOT simple_proc:v7
+    {: if(CW.usage().contains(v2)) {
+         CW.usage().put(v2, 1);
+       }
+       if(CW.usage().contains(v4)) {
+         CW.usage().put(v4, 1);
+       }
+       RESULT = CW.pcTest(v2, v4, v7, CW.pcEquals()); :}
+| LPARR LOWER_ID:v2 NEQ LOWER_ID:v4 RPARR DOT simple_proc:v7
+    {: if(CW.usage().contains(v2)) {
+         CW.usage().put(v2, 1);
+       }
+       if(CW.usage().contains(v4)) {
+         CW.usage().put(v4, 1);
+       }
+       RESULT = CW.pcTest(v2, v4, v7, CW.pcDiffers()); :}
+| SELECT LBR sum:v3 RBR
+    {: RESULT = v3; :}
+| LPAR proc:v2 RPAR
+    {: RESULT = v2; :}
+;
+
+act_sum ::=
+  LOWER_ID:v1 QUESTION LPAR inp_ids:v4 RPAR DOT simple_proc:v7 
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       for(String id: CW.makeIterable(v4)) {
+         CW.usage().remove(id);
+       }
+       RESULT = CW.pcAction(CW.pcInput(v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 QUESTION LPAR inp_ids:v4 RPAR     
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       for(String id: CW.makeIterable(v4)) {
+         CW.usage().remove(id);
+       }
+       RESULT = CW.pcAction(CW.pcInput(v1, v4.reverse()), CW.pcVoid()); :}
+| LOWER_ID:v1 BANG LPAR out_ids:v4 RPAR DOT simple_proc:v7
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       RESULT = CW.pcAction(CW.pcOutput(v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 BANG LPAR out_ids:v4 RPAR         
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       RESULT = CW.pcAction(CW.pcOutput(v1, v4.reverse()), CW.pcVoid()); :}
+| TAU DOT simple_proc:v3
+    {: RESULT = CW.pcAction(CW.pcTau(), v3); :}
+| TAU
+    {: RESULT = CW.pcAction(CW.pcTau(), CW.pcVoid()); :}
+| LPARR LOWER_ID:v2 EQ LOWER_ID:v4 RPARR DOT simple_proc:v7
+    {: if(CW.usage().contains(v2)) {
+         CW.usage().put(v2, 1);
+       }
+       if(CW.usage().contains(v4)) {
+         CW.usage().put(v4, 1);
+       }
+       RESULT = CW.pcTest(v2, v4, v7, CW.pcEquals()); :}
+| LPARR LOWER_ID:v2 NEQ LOWER_ID:v4 RPARR DOT simple_proc:v7
+    {: if(CW.usage().contains(v2)) {
+         CW.usage().put(v2, 1);
+       }
+       if(CW.usage().contains(v4)) {
+         CW.usage().put(v4, 1);
+       }
+       RESULT = CW.pcTest(v2, v4, v7, CW.pcDiffers()); :}
+;
+
+sum ::=
+  act_sum:v1             {: RESULT = v1; :}
+| sum:v1 SEMI act_sum:v3 {: RESULT = CW.pcSum(v1, v3); :}
+;
+
+id_args ::=
+  /** EMPTY **/        {: RESULT = list(); :}
+| LPAR out_ids:v2 RPAR {: RESULT = v2.reverse(); :}
+;
+
+check_ids ::=
+  /** EMPTY **/                  {: RESULT = list(); :}
+| LOWER_ID:v1                    {: RESULT = list(v1); :}
+| check_ids:v1 COMMA LOWER_ID:v3 {: RESULT = cons(v3, v1); :}
+;
+
+inp_ids ::=
+  /** EMPTY **/    
+    {: RESULT = list(); :}
+| LOWER_ID:v1
+    {: CW.names().clear();
+       CW.names().put(v1, 0);
+       CW.usage().put(v1, 0);
+       RESULT = list(v1); :}
+| inp_ids:v1 COMMA LOWER_ID:v3
+    {: if(CW.names().contains(v3)) {
+         System.out.println("Repeated name in input " + v3);
+         CW.error();
+       }
+       CW.names().put(v3, 0);
+       CW.usage().put(v3, 0);
+       RESULT = cons(v3, v1); :}
+;
+  
+out_ids ::=
+  /** EMPTY **/    
+    {: RESULT = list(); :}
+| LOWER_ID:v1
+    {: if(CW.usage().contains(v1)) {
+         CW.usage().put(v1, 1);
+       }
+       RESULT = list(v1); :}
+| out_ids:v1 COMMA LOWER_ID:v3
+    {: if(CW.usage().contains(v3)) {
+         CW.usage().put(v3, 1);
+       }
+       RESULT = cons(v3, v1); :}
+;
+
+res_ids ::=
+  LOWER_ID:v1
+    {: CW.names().clear();
+       CW.names().put(v1, 0);
+       CW.usage().put(v1, 0);
+       RESULT = list(v1); :}
+| res_ids:v1 COMMA LOWER_ID:v3     
+    {: if(CW.names().contains(v3)) {
+         System.out.println("Repeated restricted name " + v3);
+         CW.error();
+       }
+       CW.names().put(v3, 0);
+       CW.usage().put(v3, 0);
+       RESULT = cons(v3, v1); :}
+;
+
+def_prop ::=
+  DEFPROP dec_name:v2 EQ form:v4 {: RESULT = CW.ssDefineProposition(v2._1(), v2._2(), v2._3(), v4); :}
+| DEFPROP dec_name EQ error      {: CW.error("<FORMULA>"); :}
+| DEFPROP dec_name error         {: CW.error("=\n("); :}
+| DEFPROP error                  {: CW.error("<FORMULA LOWER_IDENTIFIER>"); :}
+;
+
+dec_name ::=
+  LOWER_ID:v1 LPAR param_ids:v3 COMMA props:v5 RPAR 
+   {: RESULT = new Tuple3(v1, v3.reverse(), v5); :}
+| LOWER_ID:v1 LPAR param_ids:v3 RPAR
+   {: RESULT = new Tuple3(v1, v3.reverse(), list()); :}
+| LOWER_ID:v1 LPAR props:v3 RPAR
+   {: RESULT = new Tuple3(v1, list(),v3); :}
+| LOWER_ID:v1 
+   {: RESULT = new Tuple3(v1, list(), list()); :}
+| LOWER_ID LPAR error 
+   {: CW.error("<ID> [,<ID>]*\n<PROP_ID> [,<PROP_ID>]*" +
+    "\n<ID> [,<ID>]*, <PROP_ID> [,<PROP_ID>]*"); :}
+;
+
+param_ids ::=
+  LOWER_ID:v1
+    {: CW.names().clear();
+       CW.names().put(v1, 0);
+       RESULT = list(v1); :}
+| param_ids:v1 COMMA LOWER_ID:v3
+    {: if(CW.names().contains(v3)) {
+         System.out.println("Repeated parameter name " + v3);
+         CW.error();
+       }
+       CW.names().put(v3, 0);
+       RESULT = cons(v3, v1); :}
+;
+  
+props ::=
+  CAPS_ID:v1             
+    {: CW.names().clear();
+       CW.names().put(v1, 0);
+       RESULT = list(v1); :}
+| props:v1 COMMA CAPS_ID:v3
+    {: if(CW.names().contains(v3)) {
+         System.out.println("Repeated propositional parameter name " + v3);
+         CW.error();
+       }
+       CW.names().put(v3, 0);
+       RESULT = cons(v3, v1); :}
+;
+
+label_ids ::=
+  /** EMPTY **/                  {: RESULT = list(); :}
+| LOWER_ID:v1                    {: RESULT = list(v1); :}
+| label_ids:v1 COMMA LOWER_ID:v3 {: RESULT = cons(v3, v1); :}
+;
+
+form ::=
+  simple_form:v1                 {: RESULT = v1; :}
+| form:v1 PIPE simple_form:v3    {: RESULT = CW.mlCompose(v1, v3); :}
+| form:v1 DBLPIPE simple_form:v3 {: RESULT = CW.mlDecompose(v1, v3); :}
+| form:v1 IMPLIES simple_form:v3 {: RESULT = CW.mlImplies(v1, v3); :}
+| form:v1 EQUIV simple_form:v3   {: RESULT = CW.mlEquivalent(v1, v3); :}
+| form:v1 AND simple_form:v3     {: RESULT = CW.mlAnd(v1, v3); :}
+| form:v1 OR simple_form:v3      {: RESULT = CW.mlOr(v1, v3); :}
+;
+  
+simple_form ::=
+  TRUE
+    {: RESULT = CW.mlTrue(); :}
+| FALSE
+    {: RESULT = CW.mlFalse(); :}
+| VOID             
+    {: RESULT = CW.mlVoid(); :}
+| ZERO
+    {: RESULT = CW.mlVoid(); :}
+| INT:v1
+    {: RESULT = CW.mlCompare(v1, CW.mlEqNum()); :}
+| LT ZERO
+    {: RESULT = CW.mlCompare(0, CW.mlLtNum()); :}
+| LT INT:v2
+    {: RESULT = CW.mlCompare(v2, CW.mlLtNum()); :}
+| GT ZERO
+    {: RESULT = CW.mlCompare(0, CW.mlGtNum()); :}
+| GT INT:v2
+    {: RESULT = CW.mlCompare(v2, CW.mlGtNum()); :}
+| CAPS_ID:v1 fixpoint_args:v2
+    {: RESULT = CW.mlPropositionVariable(v1, v2); :}
+| CAPS_ID:v1
+    {: List<String> n = nil();
+       RESULT = CW.mlPropositionVariable(v1, n); :}
+| LOWER_ID:v1 DEQ LOWER_ID:v3
+    {: RESULT = CW.mlEqual(v1,v3); :}
+| LOWER_ID:v1 NEQ LOWER_ID:v3
+    {: RESULT = CW.mlNotEqual(v1,v3); :}
+| LOWER_ID:v1 LPAR args:v3 RPAR
+    {: RESULT = CW.mlAbbreviate(v1, v3); :}
+| LOWER_ID:v1 
+    {: List<ModalLogic> n = nil();
+       RESULT = CW.mlAbbreviate(v1, n); :}
+| NOT simple_form:v2
+    {: RESULT = CW.mlNot(v2); :}
+| REVEAL LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlReveal(v2,v4); :}
+| REVEALALL LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlRevealAll(v2,v4); :}
+| HIDDEN LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlHidden(v2,v4); :}
+| FRESH LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlFresh(v2,v4); :}
+| FREE LOWER_ID:v2 
+    {: RESULT = CW.mlFree(v2); :}
+| LT tau GT simple_form:v4
+    {: RESULT = CW.mlMayTau(v4); :}
+| LPARR tau RPARR simple_form:v4
+    {: RESULT = CW.mlAllTau(v4); :}
+| LT label:v2 GT simple_form:v4
+    {: RESULT = CW.mlMayLabelled(v2,v4); :}
+| LPARR label:v2 RPARR simple_form:v4
+    {: RESULT = CW.mlAllLabelled(v2,v4); :}
+| LT LOWER_ID:v2 BANG GT simple_form:v5
+    {: RESULT = CW.mlMayOutputN(v2,v5); :}
+| LT LOWER_ID:v2 QUESTION GT simple_form:v5
+    {: RESULT = CW.mlMayInputN(v2,v5); :}
+| LPARR LOWER_ID:v2 BANG RPARR simple_form:v5
+    {: RESULT = CW.mlAllOutputN(v2,v5); :}
+| LPARR LOWER_ID:v2 QUESTION RPARR simple_form:v5
+    {: RESULT = CW.mlAllInputN(v2,v5); :}
+| LT BANG GT simple_form:v4
+    {: RESULT = CW.mlMayOutput(v4); :}
+| LT QUESTION GT simple_form:v4
+    {: RESULT = CW.mlMayInput(v4); :}
+| LPARR BANG RPARR simple_form:v4
+    {: RESULT = CW.mlAllOutput(v4); :}
+| LPARR QUESTION RPARR simple_form:v4
+    {: RESULT = CW.mlAllInput(v4); :}
+| LT LOWER_ID:v2 GT simple_form:v4
+    {: RESULT = CW.mlMayN(v2,v4); :}
+| LPARR LOWER_ID:v2 RPARR simple_form:v4
+    {: RESULT = CW.mlAllN(v2,v4); :}
+| LT STAR GT simple_form:v4
+    {: RESULT = CW.mlMay(v4); :}
+| LPARR STAR RPARR simple_form:v4
+    {: RESULT = CW.mlAll(v4); :}
+| EXISTS LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlExists(v2,v4); :}
+| FORALL LOWER_ID:v2 DOT simple_form:v4
+    {: RESULT = CW.mlForAll(v2,v4); :}
+| LPAR MAXFIX CAPS_ID:v3 fixpoint_args:v4 DOT simple_form:v6 RPAR fixpoint_args:v8
+    {: RESULT = CW.mlMaximumFixpoint(v3,v4,v6,v8); :}
+| MAXFIX CAPS_ID:v2 DOT simple_form:v4
+    {: List<String> n = nil();
+       RESULT = CW.mlMaximumFixpoint(v2, n, v4, n); :}
+| LPAR MINFIX CAPS_ID:v3 fixpoint_args:v4 DOT simple_form:v6 RPAR fixpoint_args:v8
+    {: RESULT = CW.mlMinimumFixpoint(v3,v4,v6,v8); :}
+| MINFIX CAPS_ID:v2 DOT simple_form:v4
+    {: List<String> n = nil();
+       RESULT = CW.mlMinimumFixpoint(v2, n, v4, n); :}
+| EVENTUALLY simple_form:v2
+    {: RESULT = CW.mlEventually(v2); :}
+| ALWAYS simple_form:v2
+    {: RESULT = CW.mlAlways(v2); :}
+| INSIDE simple_form:v2
+    {: RESULT = CW.mlInside(v2); :}
+| SHOW_F simple_form:v2
+    {: RESULT = CW.mlShowFails(v2); :}
+| SHOW_S simple_form:v2
+    {: RESULT = CW.mlShowSucceeds(v2); :}
+| LPAR form:v2 RPAR
+    {: RESULT = v2; :}
+;
+
+fixpoint_args ::=
+  LPAR label_ids:v2 RPAR {: RESULT = v2.reverse(); :}
+;
+
+label_ids_uscore ::=
+  /** EMPTY **/                         {: RESULT = list(); :}
+| LOWER_ID:v1                           {: RESULT = list(v1); :}
+| USCORE                                {: RESULT = list("_"); :}
+| label_ids_uscore:v1 COMMA LOWER_ID:v3 {: RESULT = cons(v3, v1); :}
+| label_ids_uscore:v1 COMMA USCORE      {: RESULT = cons("_", v1); :}
+;
+
+
+label ::=
+  LOWER_ID:v1 QUESTION LPAR label_ids:v4 RPAR 
+    {: RESULT = CW.mlInpLab(v1, v4.reverse()); :}
+| LOWER_ID:v1 BANG LPAR label_ids_uscore:v4 RPAR 
+    {: RESULT = CW.mlOutLab(v1, v4.reverse()); :}
+;
+
+tau ::=
+  /** EMPTY **/ {: :}
+| TAU           {: :}
+;
+
+args ::=
+  form:v1               {: RESULT = list(v1); :}
+| args:v1 COMMA form:v3 {: RESULT = snoc(v1, v3); :}
+;
+
+cc_simple_proc ::=
+  END             
+    {: RESULT = CW.ccInaction(); :}
+| CAPS_ID:v1 id_args:v2
+    {: RESULT = CW.ccVariable(v1,v2); :}
+| CTX LOWER_ID:v2 LBR proc_cc:v4 RBR 
+	{: RESULT = CW.ccContext(v2,v4); :}
+| cc_input:v1
+	{: RESULT = v1; :}
+| LOWER_ID:v1 BANG LPAR out_ids:v4 RPAR DOT cc_simple_proc:v7
+    {: RESULT = CW.ccAction(CW.ccOutput(CW.ccHere(), v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 UPC BANG LPAR out_ids:v5 RPAR DOT cc_simple_proc:v8 
+	{: RESULT = CW.ccAction(CW.ccOutput(CW.ccUp(), v1, v5.reverse()), v8); :}
+| DEFC LOWER_ID:v2 IMPLIES cc_simple_proc:v4
+	{: RESULT = CW.ccDefinition(v2, v4); :}
+| NEW LOWER_ID:v2 DOT LOWER_ID:v4 DEFARROW cc_simple_proc:v6 
+	{: RESULT = CW.ccNew(v2, v4, v6); :}
+| JOIN LOWER_ID:v2 DOT LOWER_ID:v4 DEFARROW cc_simple_proc:v6
+	{: RESULT = CW.ccJoin(v2,v4,v6); :}
+| SWITCH LBR cc_branches:v3 RBR 
+	{: RESULT = CW.ccSum(v3.reverse()); :}
+| THIS LPAR LOWER_ID:v3 RPAR DOT cc_simple_proc:v6 
+	{: RESULT = CW.ccThis(v3,v6); :}
+| IF LPAR LOWER_ID EQ LOWER_ID RPAR THEN cc_simple_proc:v8 ELSE cc_simple_proc:v10 
+	{: RESULT = CW.ccIfThenElse(v8,v10); :}
+| IF LPAR LOWER_ID NEQ LOWER_ID RPAR THEN cc_simple_proc:v8 ELSE cc_simple_proc:v10 
+	{: RESULT = CW.ccIfThenElse(v8,v10); :}
+| LPAR proc_cc:v2 RPAR 
+	{: RESULT = v2; :}
+;
+
+cc_input ::=
+  LOWER_ID:v1 QUESTION LPAR inp_ids:v4 RPAR DOT cc_simple_proc:v7 
+    {: RESULT = CW.ccAction(CW.ccInput(CW.ccHere(), v1, v4.reverse()), v7); :}
+| LOWER_ID:v1 UPC QUESTION LPAR inp_ids:v5 RPAR DOT cc_simple_proc:v8
+    {: RESULT = CW.ccAction(CW.ccInput(CW.ccUp(), v1, v5.reverse()), v8); :}
+;
+
+cc_branches ::=
+  cc_input:v1                     {: RESULT = list(v1); :}
+| cc_branches:v1 SEMI cc_input:v3 {: RESULT = cons(v3, v1); :}
+;
+
+proc_cc ::=
+  cc_simple_proc:v1                 {: RESULT = v1; :}
+| proc_cc:v1 PIPE cc_simple_proc:v3 {: RESULT = CW.ccParallel(v1,v3); :}
+| proc_cc PIPE error                {: CW.error("<PROCESS>"); :}
+;

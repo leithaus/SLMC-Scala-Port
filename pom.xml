@@ -1,0 +1,203 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>BioSimilarity</groupId>
+	<artifactId>SLMC-Scala</artifactId>
+	<version>0.1.0</version>
+	<name>${project.artifactId}</name>
+	<description>Scala port of the Spacial Logic Model-Checker</description>
+	<inceptionYear>2013</inceptionYear>
+
+	<properties>
+		<scala.version>2.10.0</scala.version>
+		<!-- Common plugin settings -->
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
+		<!-- vscaladoc settings -->
+		<maven.scaladoc.vscaladocVersion>1.2-SNAPSHOT</maven.scaladoc.vscaladocVersion>
+		<vscaladoc.links.liftweb.pathsufix>scaladocs/</vscaladoc.links.liftweb.pathsufix>
+		<vscaladoc.links.liftweb.baseurl>http://scala-tools.org/mvnsites/liftweb</vscaladoc.links.liftweb.baseurl>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.scala-lang</groupId>
+			<artifactId>scala-library</artifactId>
+			<version>${scala.version}</version>
+		</dependency>
+
+<dependency>
+	<groupId>net.sf.squirrel-sql.thirdparty.non-maven</groupId>
+	<artifactId>java-cup</artifactId>
+	<version>11a</version>
+</dependency>
+	</dependencies>
+
+	<!-- <repositories> <repository> <id>scala-tools.org</id> <name>Scala-Tools 
+		Maven2 Repository</name> <url>http://scala-tools.org/repo-releases</url> 
+		</repository> </repositories> <pluginRepositories> <pluginRepository> <id>scala-tools.org</id> 
+		<name>Scala-Tools Maven2 Repository</name> <url>http://scala-tools.org/repo-releases</url> 
+		</pluginRepository> </pluginRepositories> -->
+
+
+	<build>
+		<sourceDirectory>src/main/scala</sourceDirectory>
+		<testSourceDirectory>src/test/scala</testSourceDirectory>
+		<plugins>
+			<plugin>
+				<groupId>de.jflex</groupId>
+				<artifactId>maven-jflex-plugin</artifactId>
+				<version>1.4.3</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>generate</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>src/main/java/</outputDirectory>
+							<lexDefinitions>
+								<lexDefinition>src/main/java/biosimilarity/slmc/ast/parsing/lexer.lex</lexDefinition>
+							</lexDefinitions>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- >plugin>
+				<groupId>org.scala-tools</groupId>
+				<artifactId>maven-scala-plugin</artifactId>
+				<version>2.15.0</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>compile</goal>
+							<goal>testCompile</goal>
+						</goals>
+						<configuration>
+							<args>
+								<arg>-make:transitive</arg>
+								<arg>-dependencyfile</arg>
+								<arg>${project.build.directory}/.scala_dependencies</arg>
+							</args>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin-->
+			
+			<plugin>
+			    <groupId>org.scala-tools</groupId>
+			    <artifactId>maven-scala-plugin</artifactId>
+			 
+			    <executions>
+			      <execution>
+			        <id>compile</id>
+			        <goals>
+			          <goal>compile</goal>
+			        </goals>
+			        <phase>compile</phase>
+			      </execution>
+			 
+			      <execution>
+			        <id>test-compile</id>
+			        <goals>
+			          <goal>testCompile</goal>
+			        </goals>
+			        <phase>test-compile</phase>
+			      </execution>
+			 
+			      <execution>
+			        <phase>process-resources</phase>
+			        <goals>
+			          <goal>compile</goal>
+			        </goals>
+			      </execution>
+			    </executions>
+			</plugin>
+ 
+			<plugin>
+			    <artifactId>maven-compiler-plugin</artifactId>
+			    <configuration>
+			        <source>1.5</source>
+			        <target>1.5</target>
+			    </configuration>
+			</plugin>
+			
+			
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.6</version>
+				<configuration>
+					<useFile>false</useFile>
+					<disableXmlReport>true</disableXmlReport>
+					<!-- If you have classpath issue like NoDefClassError,... -->
+					<useManifestOnlyJar>false</useManifestOnlyJar>
+					<includes>
+						<include>**/*Test.*</include>
+						<include>**/*Suite.*</include>
+					</includes>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>t1.MCMain</mainClass>
+							<addClasspath>true</addClasspath>
+							<classpathLayoutType>custom</classpathLayoutType>
+							<customClasspathLayout>lib/$${artifact.artifactId}-$${artifact.version}$${dashClassifier?}.$${artifact.extension}
+							</customClasspathLayout>
+						</manifest>
+						<manifestEntries>
+							<mode>development</mode>
+							<url>${pom.url}</url>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<!--plugin> Eclipse complains about this. It made the project compile 
+				though. <artifactId>maven-dependency-plugin</artifactId> <version>2.3</version> 
+				<configuration> <outputDirectory>${project.build.directory}/lib</outputDirectory> 
+				</configuration> <executions> <execution> <phase>package</phase> <goals> 
+				<goal>copy-dependencies</goal> </goals> </execution> </executions> </plugin -->
+
+		</plugins>
+		<pluginManagement>
+			<plugins>
+				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+				<plugin>
+					<groupId>org.eclipse.m2e</groupId>
+					<artifactId>lifecycle-mapping</artifactId>
+					<version>1.0.0</version>
+					<configuration>
+						<lifecycleMappingMetadata>
+							<pluginExecutions>
+								<pluginExecution>
+									<pluginExecutionFilter>
+										<groupId>de.jflex</groupId>
+										<artifactId>
+											maven-jflex-plugin
+										</artifactId>
+										<versionRange>
+											[1.4.3,)
+										</versionRange>
+										<goals>
+											<goal>generate</goal>
+										</goals>
+									</pluginExecutionFilter>
+									<action>
+										<ignore></ignore>
+									</action>
+								</pluginExecution>
+							</pluginExecutions>
+						</lifecycleMappingMetadata>
+					</configuration>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+	</build>
+</project>

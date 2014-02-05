@@ -1,0 +1,43 @@
+The dependencies of each file determine the order in which we'll carry out the translation:
+
+( 151) piastnode   -> 0
+(  37) namegen     -> 0
+( 971) formastnode -> 0
+( 237) ccastnode   -> piastnode, namegen
+(  75)  mcmenu      -> piastnode, ccastnode
+(1577) equations   -> piastnode, namegen
+(2520) process     -> piastnode, namegen, equations
+( 365) iterator    -> piastnode, namegen, process
+(1315) checker     -> piastnode, namegen, formastnode, mcmenu, ccastnode, equations, process, iterator
+( 196) mcmain      -> checker, mcmenu
+(7369)
+
+
+
+The following is a description of any deviations from a strictly "idiomatic" initial translation.
+
+PIASTNODE:
+- Renamed type "test" to PiAstTest to avoid name collision
+- translated type "dec" from singleton constructor to type synonym
+
+NAMEGEN:
+- Namegen now takes 1 size argument and no accumulator argument, processes a comprehension
+
+FORMASTNODE
+- single "f1" args are renamed to "f"
+- translated type "declaration" from singleton constructor to type synonym
+- added helper function, "lookupAndMaybeAddId" to formFNAux
+- added helper function, "recurse" to formFNAux
+- added helper function, "lookupAndMaybeAddId" to substAux
+- added helper function, "recurse" to substAux
+- added helper function, "recurseWithFixAndParameters" to substAux
+
+CCASTNODE
+- translated type "cc_dec" from singleton constructor to type synonym
+- added recurse helper functions.
+
+MCMENU
+- ;
+
+EQUATIONS:
+-
